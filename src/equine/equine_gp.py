@@ -331,13 +331,17 @@ class _Laplace(torch.nn.Module):
             self.precision += precision_minibatch
             self.seen_data += x.shape[0]
 
-            assert self.seen_data <= self.num_data, (
-                "Did not reset precision matrix at start of epoch"
-            )
+            # Tensor-valued asserts force a data-dependent guard that
+            # torch.export cannot resolve, so skip them while tracing.
+            if not torch.compiler.is_compiling():
+                assert self.seen_data <= self.num_data, (
+                    "Did not reset precision matrix at start of epoch"
+                )
         else:
-            assert self.seen_data > (self.num_data - self.train_batch_size), (
-                "Not seen sufficient data for precision matrix"
-            )
+            if not torch.compiler.is_compiling():
+                assert self.seen_data > (self.num_data - self.train_batch_size), (
+                    "Not seen sufficient data for precision matrix"
+                )
 
             if self.recompute_covariance:
                 with torch.no_grad():
@@ -347,7 +351,8 @@ class _Laplace(torch.nn.Module):
                         device=self.precision.device,
                     )
                     u, info = torch.linalg.cholesky_ex(self.precision + jitter)
-                    assert (info == 0).all(), "Precision matrix inversion failed!"
+                    if not torch.compiler.is_compiling():
+                        assert (info == 0).all(), "Precision matrix inversion failed!"
                     torch.cholesky_inverse(u, out=self.covariance)
 
                 self.recompute_covariance: bool = False
