@@ -1,42 +1,41 @@
 [build-system]
-requires = ["setuptools>=61.0","setuptools_scm[toml]>=6.2"] 
-build-backend = "setuptools.build_meta"
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
 
 [project]
 name = "equine"
 dynamic = ["version"]
 authors = [
-    { name = "Allan Wollaber"},
-    { name = "Steven Jorgensen"},
+    { name = "Allan Wollaber" },
+    { name = "Steven Jorgensen" },
     { name = "John Holodnak" },
     { name = "Jensen Dempsey" },
     { name = "Harry Li" },
 ]
-maintainers = [
-    { name = "Allan Wollaber"}, 
-    { name = "Steven Jorgensen"},
-]
+maintainers = [{ name = "Allan Wollaber" }, { name = "Steven Jorgensen" }]
 description = "EQUINE^2: Establishing Quantified Uncertainty for Neural Networks"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
-        "torch >= 1.10.0, < 2.3.0 ; platform_machine == 'x86_64' and sys_platform == 'darwin'",
-        "torch >= 2.0.0, < 2.10.0 ; platform_machine != 'x86_64' or sys_platform != 'darwin'",
-        "torchmetrics >= 0.6.0",
-        "numpy >= 1.22.0, < 2.0.0 ; platform_machine == 'x86_64' and sys_platform == 'darwin'",
-        "numpy >= 1.22.0, <= 2.4.0 ; platform_machine != 'x86_64' or sys_platform != 'darwin'",
-        "tqdm",
-        "beartype",
-        "icontract",
-        "scipy < 1.17.0 ; platform_machine == 'x86_64' and sys_platform == 'darwin'",
-        "scipy ; platform_machine != 'x86_64' or sys_platform != 'darwin'",
-] 
+    # Intel macOS (x86_64 darwin) is not supported: PyTorch ships no x86_64
+    # macOS wheels from 2.3.0 onward, so this floor is unsatisfiable there.
+    # Apple silicon (arm64) macOS, Linux and Windows are unaffected.
+    "torch >= 2.10.0",
+    "torchmetrics >= 0.6.0",
+    "numpy >= 2.4.0",
+    "tqdm",
+    "beartype",
+    "icontract",
+    "scipy>=1",
+]
 license = { text = "MIT" }
 keywords = ["machine learning", "robustness", "pytorch", "responsible", "AI"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering",
     "Programming Language :: Python :: 3 :: Only",
@@ -48,7 +47,7 @@ tests = [
     "pytest-cov",
     "hypothesis >= 6.105.0, < 6.166.0",
     "pre-commit >= 2.19",
-    "codespell"
+    "codespell",
 ]
 
 docs = [
@@ -66,12 +65,17 @@ docs = [
 "Bug Tracker" = "https://github.com/mit-ll-responsible-ai/equine/issues"
 "Source" = "https://github.com/mit-ll-responsible-ai/equine"
 
-[tool.setuptools_scm]
-write_to = "src/equine/_version.py"
-#version_scheme = "no-guess-dev"
+[tool.hatch.version]
+source = "vcs"
+# Used when no git metadata is available (sdist/tarball builds, shallow or
+# tag-less clones). Tracks the latest upstream release tag, v0.1.8.
+fallback-version = "0.1.8"
 
-[tool.setuptools.package-data]
-equine = ["py.typed"]
+[tool.hatch.build.hooks.vcs]
+version-file = "src/equine/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/equine"]
 
 [tool.ruff]
 line-length = 88
@@ -104,6 +108,9 @@ combine-as-imports = true
 [tool.pytest.ini_options]
 addopts = "--durations=0"
 testpaths = ["tests"]
+markers = [
+    "aoti: AOTInductor tests; invoke a C++ compiler and are slow (deselect with '-m \"not aoti\"')",
+]
 
 [tool.coverage.run]
 branch = true
@@ -111,27 +118,27 @@ branch = true
 [tool.coverage.report]
 omit = ["src/equine/_version.py"]
 exclude_lines = [
-       'pragma: no cover',
-       'def __repr__',
-       'raise NotImplementedError',
-       'raise ValueError',
-       '@(abc\.)?abstractmethod',
-       '@(typing\.)?overload',
-       'except ImportError:',
-       'except ModuleNotFoundError:',
-       'if (typing\.)?TYPE_CHECKING:',
-       'if sys\.version_info',
+    'pragma: no cover',
+    'def __repr__',
+    'raise NotImplementedError',
+    'raise ValueError',
+    '@(abc\.)?abstractmethod',
+    '@(typing\.)?overload',
+    'except ImportError:',
+    'except ModuleNotFoundError:',
+    'if (typing\.)?TYPE_CHECKING:',
+    'if sys\.version_info',
 ]
 
 [tool.pyright]
 include = ["src"]
 exclude = [
-       "**/node_modules",
-       "**/__pycache__",
-       "src/equine/_version.py",
-       "**/.hypothesis",
-       "**/docs",
-       "**/.tox",
+    "**/node_modules",
+    "**/__pycache__",
+    "src/equine/_version.py",
+    "**/.hypothesis",
+    "**/docs",
+    "**/.tox",
 ]
 reportUnnecessaryTypeIgnoreComment = true
 reportUnnecessaryIsInstance = false
@@ -144,11 +151,10 @@ legacy_tox_ini = """
 
 [tox]
 isolated_build = True
-envlist = py310, py311, py312, py313, py314
+envlist = py311, py312, py313, py314
 
 [gh-actions]
 python =
-  3.10: py310
   3.11: py311
   3.12: py312
   3.13: py313
@@ -166,10 +172,8 @@ deps = pytest
        hypothesis
        pytest-xdist
        tzdata
-       numpy<2.0.0 ; platform_machine == "x86_64" and sys_platform == "darwin"
-       numpy 
-       torch >= 1.10.0, < 2.3.0 ; platform_machine == 'x86_64' and sys_platform == 'darwin'
-       torch >= 2.0.0, < 2.10.0 ; platform_machine != 'x86_64' or sys_platform != 'darwin'
+       numpy>=2.4.0 
+       torch>=2.10.0
 commands = pytest tests/ {posargs: -n auto --maxprocesses=4}
 
 
@@ -182,9 +186,8 @@ basepython = python3.11
 deps = {[testenv]deps}
        coverage[toml]
        pytest-cov
-       numpy<2.0.0 ; platform_machine == "x86_64" and sys_platform == "darwin"
-       numpy ; platform_machine != "x86_64" or sys_platform != "darwin"
-       torch>=2.0.0
+       numpy>=2.4.0 
+       torch>=2.10.0
 commands = pytest --cov-report term-missing --cov-config=pyproject.toml --cov-fail-under=97 --cov=equine tests {posargs: -n auto --maxprocesses=4}
 
 
@@ -195,9 +198,8 @@ description = Ensure that the equine source code and test suite scan clean
 usedevelop = true
 basepython = python3.11
 deps = pyright
-       numpy<2.0.0 ; platform_machine == "x86_64" and sys_platform == "darwin"
-       numpy ; platform_machine != "x86_64" or sys_platform != "darwin"
-       torch>=2.0.0
+       numpy>2.4.0
+       torch>=2.10.0
 
 commands = pyright src/ --level=error
            pyright --ignoreexternal --level=warning --verifytypes equine
