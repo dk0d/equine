@@ -5,7 +5,6 @@ As a consequence, Intel-based macOS is no longer supported (see [Platform suppor
 
 <p align="center"><img src="assets/equine_full_logo.svg" width="720"\></p>
 
-[![PyPi](https://img.shields.io/pypi/v/equine.svg)](https://pypi.org/project/equine/)
 [![Build Status](https://github.com/mit-ll-responsible-ai/equine/actions/workflows/Tests.yml/badge.svg?branch=main)](https://github.com/mit-ll-responsible-ai/equine/actions/workflows/Tests.yml)
 ![python_passing_tests](https://img.shields.io/badge/Tests%20Passed-100%25-green)
 [![python_coverage](https://img.shields.io/badge/Coverage-97%25-green)](https://mit-ll-responsible-ai.github.io/equine/coverage/)
@@ -35,9 +34,14 @@ Users are recommended to install a virtual environment such as Anaconda, as is a
 in the [pytorch installation](https://github.com/pytorch/pytorch). EQUINE has relatively
 few dependencies beyond torch.
 
+This fork is not published to PyPI, so install it from git:
+
 ```console
-pip install equine
+pip install git+https://github.com/dk0d/equine
 ```
+
+`pip install equine` installs the upstream package, which does not include the
+changes in this fork.
 
 ### Platform support
 

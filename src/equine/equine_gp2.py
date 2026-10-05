@@ -20,6 +20,7 @@ from .utils import generate_support, generate_train_summary
 
 BatchType = tuple[torch.Tensor, ...]
 
+
 def latent_hilbert_transform(x):
     """
     Computes the Hilbert transform of a real-valued signal using the FFT.
@@ -516,14 +517,14 @@ class EquineGP2(EquineGP):
         return EquineOutput(classes=preds, ood_scores=ood_score, embeddings=embeddings)
 
     def save(self, path: str) -> None:
-       """
-       Function to save all model parameters to a file.
+        """
+        Function to save all model parameters to a file.
 
-       Parameters
-       ----------
-       path : str
-           Filename to write the model.
-       """
+        Parameters
+        ----------
+        path : str
+            Filename to write the model.
+        """
         model_settings = {
             "emb_out_dim": self.num_deep_features,
             "num_classes": self.num_outputs,
@@ -565,7 +566,7 @@ class EquineGP2(EquineGP):
         ----------
         path : str
             Input filename.
-            
+
         embedder : torch.nn.Module
             A freshly-constructed embedder with the SAME architecture/config used
             at training time. Its weights will be overwritten by the saved ones.
