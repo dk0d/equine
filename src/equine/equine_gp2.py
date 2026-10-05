@@ -16,7 +16,7 @@ from tqdm import tqdm
 from equine import EquineGP
 
 from .equine import Equine, EquineOutput
-from .utils import generate_support, generate_train_summary
+from .utils import generate_train_summary
 
 BatchType = tuple[torch.Tensor, ...]
 
