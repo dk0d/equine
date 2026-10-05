@@ -321,7 +321,11 @@ class Protonet(torch.nn.Module):
         return shared_covariance
 
     @icontract.require(lambda X_embed, mu: X_embed.shape[-1] == mu.shape[-1])
-    @icontract.ensure(lambda result: torch.all(result >= 0))
+    # Tensor-valued postcondition forces a data-dependent guard that
+    # torch.export cannot resolve, so skip it while tracing.
+    @icontract.ensure(
+        lambda result: torch.compiler.is_compiling() or torch.all(result >= 0)
+    )
     def compute_distance(
         self, X_embed: torch.Tensor, mu: torch.Tensor, cov: torch.Tensor
     ) -> torch.Tensor:
@@ -398,7 +402,7 @@ class Protonet(torch.nn.Module):
             )
 
         X_embed = self.compute_embeddings(X)
-        if X_embed.shape == torch.Size([self.emb_out_dim]):
+        if X_embed.dim() == 1:
             X_embed = X_embed.unsqueeze(dim=0)  # handle single examples
         distances = self.compute_distance(X_embed, self.prototypes, self.covariance)
         classes = self.compute_classes(distances)

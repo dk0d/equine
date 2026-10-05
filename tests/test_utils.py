@@ -239,3 +239,22 @@ def test_prepare_jit_module_makes_module_scriptable(in_dim, out_dim, batch):
     scripted = torch.jit.script(model)  # must not raise on Python 3.14
     x = torch.rand(batch, in_dim)
     assert torch.allclose(scripted(x), model(x))
+
+
+@given(
+    in_dim=st.integers(min_value=1, max_value=16),
+    out_dim=st.integers(min_value=1, max_value=16),
+    batch=st.integers(min_value=1, max_value=8),
+)
+@settings(deadline=None, max_examples=5)
+def test_prepare_jit_module_leaves_module_compilable(in_dim, out_dim, batch):
+    # prepare_jit_module writes to the instance __dict__; that must not confuse
+    # torch.compile or torch.export, which read annotations off the class.
+    model = eq.utils.prepare_jit_module(_NoAnnotationModel(in_dim, out_dim))
+    x = torch.rand(batch, in_dim)
+    eager = model(x)
+
+    assert torch.allclose(torch.compile(model)(x), eager, atol=1e-5)
+    assert torch.allclose(
+        torch.export.export(model, (x,)).module()(x), eager, atol=1e-5
+    )
