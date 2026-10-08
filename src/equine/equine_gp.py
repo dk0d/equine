@@ -394,6 +394,7 @@ class EquineGP(Equine):
         device: str = "cpu",
         feature_names: Optional[list[str]] = None,
         label_names: Optional[list[str]] = None,
+        laplace_model: _Laplace | None = None,
     ) -> None:
         """
         Initialize the EquineGP model.
@@ -416,6 +417,8 @@ class EquineGP(Equine):
             List of strings of the names of the tabular features (ex ["duration", "fiat_mean", ...])
         label_names : list[str], optional
             List of strings of the names of the labels (ex ["streaming", "voip", ...])
+        laplace_model : _Laplace, optional
+            Override the default _Laplace model with a custom implementation
         """
         super().__init__(
             embedding_model, feature_names=feature_names, label_names=label_names
@@ -432,17 +435,20 @@ class EquineGP(Equine):
         self.register_buffer(
             "temperature", torch.Tensor(self.init_temperature * torch.ones(1))
         )
-        self.model: _Laplace = _Laplace(
-            self.embedding_model,
-            self.num_deep_features,
-            self.num_gp_features,
-            self.normalize_gp_features,
-            self.num_random_features,
-            self.num_outputs,
-            self.feature_scale,
-            self.mean_field_factor,
-            self.ridge_penalty,
-        )
+        if laplace_model is None:
+            self.model: _Laplace = _Laplace(
+                self.embedding_model,
+                self.num_deep_features,
+                self.num_gp_features,
+                self.normalize_gp_features,
+                self.num_random_features,
+                self.num_outputs,
+                self.feature_scale,
+                self.mean_field_factor,
+                self.ridge_penalty,
+            )
+        else:
+            self.model = laplace_model
         self.device_type = device
         self.device: torch.device = torch.device(self.device_type)
         self.model.to(self.device)

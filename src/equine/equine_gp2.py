@@ -14,11 +14,68 @@ from torchmetrics.metric import Metric
 from tqdm import tqdm
 
 from equine import EquineGP
+from equine.equine_gp import _Laplace
 
 from .equine import Equine, EquineOutput
 from .utils import generate_train_summary
 
 BatchType = tuple[torch.Tensor, ...]
+
+
+class _Laplace2(_Laplace):
+    """
+    A private class to compute a Laplace approximation to a Gaussian Process (GP)
+    """
+
+    @icontract.require(lambda self: self.training_parameters_set)
+    def forward(self, x, mask=None, accumulate_precision: bool = True):
+        if mask is None:
+            f = self.feature_extractor(x)
+        else:
+            f = self.feature_extractor(x, mask)
+
+        f_reduc = self.jl(f)
+        if self.normalize_gp_features:
+            f_reduc = self.normalize(f_reduc)
+        k = self.rff(f_reduc)
+        pred = self.beta(k)
+
+        if self.training:
+            if accumulate_precision:  # <-- gate
+                precision_minibatch = k.t() @ k
+                self.precision = self.precision + precision_minibatch
+                self.seen_data += x.shape[0]
+                assert self.seen_data <= self.num_data, (
+                    "Did not reset precision matrix at start of epoch"
+                )
+
+        else:
+            assert self.seen_data > (self.num_data - self.train_batch_size), (
+                "Not seen sufficient data for precision matrix"
+            )
+
+            if self.recompute_covariance:
+                with torch.no_grad():
+                    eps = 1e-7
+                    jitter = eps * torch.eye(
+                        self.precision.shape[1],
+                        device=self.precision.device,
+                    )
+                    u, info = torch.linalg.cholesky_ex(self.precision + jitter)
+                    assert (info == 0).all(), "Precision matrix inversion failed!"
+                    torch.cholesky_inverse(u, out=self.covariance)
+
+                self.recompute_covariance: bool = False
+
+            with torch.no_grad():
+                pred_cov = k @ ((self.covariance @ k.t()) * self.ridge_penalty)
+
+            if self.mean_field_factor is None:
+                return pred, pred_cov
+            else:
+                pred = self.mean_field_logits(pred, pred_cov, self.mean_field_factor)
+
+        return pred, f
 
 
 def latent_hilbert_transform(x):
@@ -137,6 +194,17 @@ class EquineGP2(EquineGP):
         label_names : list[str], optional
             List of strings of the names of the labels (ex ["streaming", "voip", ...])
         """
+        laplace_model = _Laplace2(
+            self.embedding_model,
+            self.num_deep_features,
+            self.num_gp_features,
+            self.normalize_gp_features,
+            self.num_random_features,
+            self.num_outputs,
+            self.feature_scale,
+            self.mean_field_factor,
+            self.ridge_penalty,
+        )
         super().__init__(
             embedding_model,
             emb_out_dim,
@@ -146,6 +214,7 @@ class EquineGP2(EquineGP):
             device,
             feature_names=feature_names,
             label_names=label_names,
+            laplace_model=laplace_model,
         )
 
     def train_model(
