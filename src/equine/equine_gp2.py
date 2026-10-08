@@ -195,15 +195,15 @@ class EquineGP2(EquineGP):
             List of strings of the names of the labels (ex ["streaming", "voip", ...])
         """
         laplace_model = _Laplace2(
-            self.embedding_model,
-            self.num_deep_features,
-            self.num_gp_features,
-            self.normalize_gp_features,
-            self.num_random_features,
-            self.num_outputs,
-            self.feature_scale,
-            self.mean_field_factor,
-            self.ridge_penalty,
+            embedding_model,
+            emb_out_dim,
+            emb_out_dim,
+            True,
+            num_random_features,
+            num_classes,
+            2.0,
+            25,
+            1,
         )
         super().__init__(
             embedding_model,
