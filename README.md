@@ -6,9 +6,8 @@ As a consequence, Intel-based macOS is no longer supported (see [Platform suppor
 <p align="center"><img src="assets/equine_full_logo.svg" width="720"\></p>
 
 [![Build Status](https://github.com/mit-ll-responsible-ai/equine/actions/workflows/Tests.yml/badge.svg?branch=main)](https://github.com/mit-ll-responsible-ai/equine/actions/workflows/Tests.yml)
-![python_passing_tests](https://img.shields.io/badge/Tests%20Passed-100%25-green)
-[![python_coverage](https://img.shields.io/badge/Coverage-97%25-green)](https://mit-ll-responsible-ai.github.io/equine/coverage/)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![python_coverage](https://img.shields.io/endpoint?url=https://mit-ll-responsible-ai.github.io/equine/coverage/badge.json)](https://mit-ll-responsible-ai.github.io/equine/coverage/)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Tested with Hypothesis](https://img.shields.io/badge/hypothesis-tested-brightgreen.svg)](https://hypothesis.readthedocs.io/)
 [![DOI](https://zenodo.org/badge/653796804.svg)](https://zenodo.org/badge/latestdoi/653796804)
 
@@ -39,31 +38,7 @@ This fork is not published to PyPI, so install it from git:
 ```console
 pip install git+https://github.com/dk0d/equine
 ```
-
-`pip install equine` installs the upstream package, which does not include the
-changes in this fork.
-
-### Platform support
-
-Requires Python 3.11+. Supported platforms:
-
-| Platform                     | Supported |
-| ---------------------------- | --------- |
-| Linux (x86_64, aarch64)      | Yes       |
-| macOS, Apple silicon (arm64) | Yes       |
-| Windows (x86_64)             | Yes       |
-| **macOS, Intel (x86_64)**    | **No**    |
-
-Intel macOS is not supported because this fork requires `torch >= 2.10`, and
-PyTorch has not published x86_64 macOS wheels since version 2.3.0. Installing on
-an Intel Mac fails at dependency resolution with no matching `torch` distribution.
-
-Earlier versions of this package worked around this by capping dependencies on
-Intel macOS (`torch < 2.3.0`, with matching `numpy < 2.0.0` and `scipy < 1.17.0`
-to stay ABI-compatible). Those caps were removed along with the torch 2.10 floor.
-Intel Mac users should use `equine <= 0.1.8` from the upstream project.
-
-Users interested in contributing should refer to `CONTRIBUTING.md` for details.
+Users interested in contributing should refer to [CONTRIBUTING.md](https://github.com/mit-ll-responsible-ai/equine/blob/main/docs/CONTRIBUTING.md) for details.
 
 ## Design
 

@@ -2,9 +2,12 @@
 # Subject to FAR 52.227-11 – Patent Rights – Ownership by the Contractor (May 2014).
 # SPDX-License-Identifier: MIT
 
+import contextlib
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from typing import Any, Optional, TypeVar
+from collections.abc import Callable
+from itertools import chain
+from typing import Any, TypeVar
 
 import icontract
 import torch
@@ -12,8 +15,92 @@ from torch.utils.data import TensorDataset
 
 from .equine_output import EquineOutput
 
+
+@contextlib.contextmanager
+def _eval_mode(module: torch.nn.Module):
+    """Run the body with ``module`` in eval mode, then restore every submodule's mode.
+
+    The mode of every submodule is recorded and ``module.eval()`` is called. On the way
+    out, each submodule whose class overrides ``train()`` is given ``train()`` with its
+    recorded mode, which undoes what its ``train(False)`` did on the way in (loralib's
+    ``merge_weights=True`` layers, for example, merge their LoRA weights in eval mode
+    and unmerge them in training mode). Then every submodule's flag is set back
+    individually (``m.training = ...``, which does not propagate). A frozen embedding
+    (``model.train(); model.embedding_model.eval()``, which keeps BatchNorm statistics
+    and dropout fixed while the head trains) is still frozen afterwards, and so is any
+    other mix the caller set.
+    """
+    modes = {m: m.training for m in module.modules()}
+    module.eval()
+    try:
+        yield
+    finally:
+        for m, training in modes.items():
+            if type(m).train is not torch.nn.Module.train:
+                m.train(training)
+        for m, training in modes.items():
+            m.training = training
+
+
 # A type variable for Equine objects
 AnyEquine = TypeVar("AnyEquine", bound="Equine")
+
+
+def _named_device(name: str) -> torch.device | None:
+    """The device a tensor created with ``device=name`` lands on; None if this process has no such device."""
+    try:
+        return torch.empty(0, dtype=torch.uint8, device=name).device
+    except Exception:  # by backend: AssertionError, RuntimeError or ImportError
+        return None
+
+
+def _apply_to_stored_tensors(
+    module: torch.nn.Module,
+    fn: Callable[[torch.Tensor], torch.Tensor],
+    recurse: bool = True,
+) -> None:
+    """
+    Apply ``fn`` to the tensors ``module`` keeps outside its parameters and buffers.
+
+    ``nn.Module._apply``, which ``to``, ``cpu``, ``cuda`` and the dtype casts call,
+    reaches parameters and buffers only. The model classes call this from their
+    ``_apply``, after ``nn.Module._apply`` with the same ``recurse``. It applies ``fn``
+    to the plain tensor attributes ``prototypes``, ``covariance``, ``global_mean`` and
+    ``global_covariance`` and to every tensor in ``support`` and ``support_embeddings``.
+
+    ``module.device`` then names the device the tensors are on (that of its
+    first parameter, buffer or stored tensor): it is kept as given when it
+    names that device, and otherwise becomes that device's name (``"mps:0"``
+    after ``to("mps")`` from the CPU; ``"cpu"`` after ``cpu()`` or ``float()``
+    on a CPU model whose ``device`` names a device this process lacks). A
+    module without tensors applies ``fn`` to an empty tensor on ``device``
+    instead, or on the CPU when this process lacks ``device``.
+    """
+    stored: list[torch.Tensor] = []
+    for name in ("prototypes", "covariance", "global_mean", "global_covariance"):
+        value = module.__dict__.get(name)
+        if isinstance(value, torch.Tensor):
+            moved = fn(value)
+            setattr(module, name, moved)
+            stored.append(moved)
+    for name in ("support", "support_embeddings"):
+        value = module.__dict__.get(name)
+        if isinstance(value, dict):
+            moved_dict = OrderedDict((label, fn(x)) for label, x in value.items())
+            setattr(module, name, moved_dict)
+            stored.extend(moved_dict.values())
+    device = module.__dict__.get("device")
+    if isinstance(device, str):
+        named = _named_device(device)
+        held = chain(
+            module.parameters(recurse=recurse), module.buffers(recurse=recurse), stored
+        )
+        reference = next(held, None)
+        if reference is None:
+            probe = torch.empty(0, dtype=torch.uint8, device=named or "cpu")
+            reference = fn(probe)
+        if reference.device != named:
+            setattr(module, "device", str(reference.device))
 
 
 class Equine(torch.nn.Module, ABC):
@@ -63,8 +150,8 @@ class Equine(torch.nn.Module, ABC):
         embedding_model: torch.nn.Module,
         head_layers: int = 1,
         device: str = "cpu",
-        feature_names: Optional[list[str]] = None,
-        label_names: Optional[list[str]] = None,
+        feature_names: list[str] | None = None,
+        label_names: list[str] | None = None,
     ) -> None:
         super().__init__()
         self.embedding_model = embedding_model
@@ -80,9 +167,20 @@ class Equine(torch.nn.Module, ABC):
         self.feature_names = feature_names
         self.label_names = label_names
 
-        self.support: OrderedDict[int, torch.Tensor] = OrderedDict()
-        self.support_embeddings: OrderedDict[int, torch.Tensor] = OrderedDict()
-        self.prototypes: torch.Tensor = torch.Tensor()
+    def _apply(
+        self, fn: Callable[[torch.Tensor], torch.Tensor], recurse: bool = True
+    ) -> "Equine":
+        """
+        ``nn.Module._apply``, extended to the stored tensors listed in
+        ``_apply_to_stored_tensors``.
+
+        ``to``, ``cpu``, ``cuda`` and the dtype casts call it. ``model.to(device)``
+        moves every tensor the model keeps and updates ``device`` (see
+        ``_apply_to_stored_tensors``).
+        """
+        super()._apply(fn, recurse)
+        _apply_to_stored_tensors(self, fn, recurse)
+        return self
 
     @abstractmethod
     def forward(self, X: torch.Tensor) -> torch.Tensor:
@@ -106,7 +204,7 @@ class Equine(torch.nn.Module, ABC):
     @abstractmethod
     def predict(self, X: torch.Tensor) -> EquineOutput:
         """
-        Upon implementation, predicts the class logits and out-of-distribution (ood) scores for the
+        Upon implementation, predicts the class probabilities and out-of-distribution (ood) scores for the
         given input data.
 
         Parameters
@@ -140,6 +238,43 @@ class Equine(torch.nn.Module, ABC):
         dict[str, Any]
             Dictionary containing summary training information and any other data
             Note that at least one key should be 'train_summary'
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def update_support(
+        self,
+        support_x: torch.Tensor,
+        support_y: torch.Tensor,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        """
+        Upon implementation, replace the model's support with examples taken from
+        the given ones.
+
+        Parameters
+        ----------
+        support_x : torch.Tensor
+            Tensor containing the examples to take the support from.
+        support_y : torch.Tensor
+            Tensor containing the label of each example in ``support_x``.
+        *args, **kwargs
+            The options of the implementation: ``calib_frac`` and ``label_names``
+            for ``EquineProtonet``, ``support_size`` for ``EquineGP``, each passed
+            by keyword.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_support(self) -> OrderedDict[int, torch.Tensor]:
+        """
+        Upon implementation, returns the support examples.
+
+        Returns
+        -------
+        OrderedDict[int, torch.Tensor]
+            The support examples of each class, keyed by label.
         """
         raise NotImplementedError
 
@@ -184,26 +319,37 @@ class Equine(torch.nn.Module, ABC):
         """
         raise NotImplementedError
 
-    def get_label_names(self) -> Optional[list[str]]:
+    def get_label_names(self) -> list[str] | None:
         """
         Retrieve the label names used in the model.
 
         Returns
         -------
-        Optional[list[str]]
+        list[str] | None
             A list of label names if available; otherwise, None.
         """
         if hasattr(self, "label_names"):
             return self.label_names
         return None
 
-    def get_feature_names(self) -> Optional[list[str]]:
+    def _label_order(self) -> list[int] | None:
+        """
+        The class label of each column of ``predict``'s ``classes``.
+
+        Returns
+        -------
+        list[int] | None
+            None: column ``j`` holds label ``j``.
+        """
+        return None
+
+    def get_feature_names(self) -> list[str] | None:
         """
         Retrieve the feature names used in the model.
 
         Returns
         -------
-        Optional[list[str]]
+        list[str] | None
             A list of feature names if available; otherwise, None.
         """
         if hasattr(self, "feature_names"):

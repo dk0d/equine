@@ -3,7 +3,7 @@
 ## Developer Installation 
 1. Clone the [git repository](https://github.com/mit-ll-responsible-ai/equine) and navigate to that directory
     
-2. Install a virtual environment. We currently support python versions from 3.10 to 3.14.
+2. Install a virtual environment. We currently support python versions from 3.11 to 3.15.
 
     Using conda:
 
@@ -19,17 +19,26 @@
     source .venv/bin/activate
     ```
 
-3. Install the code with the extra `tests` dependencies
+3. Install the code with the `dev` extra (the test dependencies plus pre-commit and codespell)
 
     ```shell
-    pip install -e .'[tests]'
+    pip install -e .'[dev]'
     ```
 
     If you created the environment with uv, you can use `uv pip` instead:
 
     ```shell
-    uv pip install -e '.[tests]'
+    uv pip install -e '.[dev]'
     ```
+
+    On Python 3.15, torch is published only on PyTorch's own package index
+    until torch 2.15 reaches PyPI; install it from there first, e.g.
+    `pip install torch --index-url https://download.pytorch.org/whl/cpu`.
+    On macOS with Python 3.15, use torch >= 2.15 (torch 2.14 crashes there
+    when used from several threads, and EQUINE warns at import); until it is
+    released, use `https://download.pytorch.org/whl/test/cpu`, or for tox
+    `EQUINE_TORCH_INDEX=https://download.pytorch.org/whl/test/cpu tox -r -e py315`
+    (`-r` rebuilds an environment that already has an older torch).
 
 4. Activate the pre-commit hooks
     ```console
@@ -55,6 +64,7 @@ There are a number of Github Actions enabled to ensure high code quality upon co
 * Tests must be added and all tests must pass (100%) before closing a pull request
 * Total coverage should be 97% or higher
 * We enforce a code style via `ruff` (formatting + linting, including import sorting) and `codespell`. If formatting issues are found, `tox -e format` usually fixes them automatically.
+* A job runs the suite with every dependency at the lowest version `pyproject.toml` allows (`tox -e floors`, which needs tox-uv). When code needs a newer release of a dependency, raise its floor.
 
 ## Documentation
 In the [MIT-LL Responsible AI GitHub organization](https://github.com/mit-ll-responsible-ai), we use the numpy/scipy format for docstrings.

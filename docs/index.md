@@ -3,9 +3,8 @@
 
 [![PyPi](https://img.shields.io/pypi/v/equine.svg)](https://pypi.org/project/equine/)
 [![Build Status](https://github.com/mit-ll-responsible-ai/equine/actions/workflows/Tests.yml/badge.svg?branch=main)](https://github.com/mit-ll-responsible-ai/equine/actions/workflows/Tests.yml)
-![python_passing_tests](https://img.shields.io/badge/Tests%20Passed-100%25-green)
-![python_coverage](https://img.shields.io/badge/Coverage-97%25-green)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![python_coverage](https://img.shields.io/endpoint?url=https://mit-ll-responsible-ai.github.io/equine/coverage/badge.json)](https://mit-ll-responsible-ai.github.io/equine/coverage/)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Tested with Hypothesis](https://img.shields.io/badge/hypothesis-tested-brightgreen.svg)](https://hypothesis.readthedocs.io/)
 [![DOI](https://zenodo.org/badge/653796804.svg)](https://zenodo.org/badge/latestdoi/653796804)
 
@@ -27,6 +26,18 @@ in the [pytorch installation](https://github.com/pytorch/pytorch). EQUINE has re
 few dependencies beyond torch. 
 ```console
 pip install equine
+```
+EQUINE supports Python 3.11 to 3.15 and requires torch 2.14.1 or later (on macOS, an Apple silicon
+Mac with macOS 14 or later). On Python 3.15, install torch from PyTorch's index first:
+```console
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install equine
+```
+On macOS with Python 3.15, use torch 2.15 or later: torch 2.14 crashes there when it is used
+from several threads at once, and EQUINE warns at import. Until torch 2.15 is released,
+install it from PyTorch's test index:
+```console
+pip install --upgrade 'torch>=2.15' --index-url https://download.pytorch.org/whl/test/cpu
 ```
 Users interested in contributing should refer to [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
